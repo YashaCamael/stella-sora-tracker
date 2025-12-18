@@ -595,7 +595,9 @@
 
             // Save scroll positions before clearing
             let scrollMap = {};
+            let winScroll = 0;
             if (preserveScroll) {
+                winScroll = window.scrollY;
                 document.querySelectorAll('.target-list-container').forEach(el => {
                     scrollMap[el.id] = el.scrollTop;
                 });
@@ -611,6 +613,7 @@
 
             // Restore scroll positions
             if (preserveScroll) {
+                window.scrollTo(0, winScroll);
                 Object.keys(scrollMap).forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.scrollTop = scrollMap[id];
@@ -799,47 +802,21 @@
             loadTracker(trackerId, true); // preserve scroll
         }
 
-        // FIXED: SMART UPDATE (No Re-render)
+        // FIXED: Unified update logic (uses loadTracker with preserveScroll)
         function updateLevel(trackerId, potId, change, charId, role) {
             const tracker = trackers.find(t => t.id === trackerId);
             const target = tracker.targets.find(t => t.potentialId === potId);
-            const pot = gameData.potentials.find(p => p.id === potId);
 
-            if (target && pot) {
+            if (target) {
                 let newLevel = target.level + change;
                 if (newLevel < 1) newLevel = 1;
                 if (newLevel > MAX_LEVEL) newLevel = MAX_LEVEL;
 
-                // Update Data
-                target.level = newLevel;
-                saveData();
-
-                // --- DOM UPDATES (No full reload) ---
-
-                // 1. Update Number
-                document.getElementById(`lvl-display-${potId}`).textContent = newLevel;
-
-                // 2. Update Description
-                document.getElementById(`desc-${potId}`).innerHTML = resolveDescription(pot, newLevel);
-
-                // 3. Update Max Badge & Border
-                const cardItem = document.getElementById(`target-item-${potId}`);
-                const badgeContainer = document.getElementById(`badge-${potId}`);
-
-                if (newLevel === MAX_LEVEL) {
-                    cardItem.classList.remove('border-0');
-                    cardItem.classList.add('border-warning', 'border-2');
-                    badgeContainer.innerHTML = '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>';
-                } else {
-                    cardItem.classList.remove('border-warning', 'border-2');
-                    cardItem.classList.add('border-0');
-                    badgeContainer.innerHTML = '';
+                if (target.level !== newLevel) {
+                    target.level = newLevel;
+                    saveData();
+                    loadTracker(trackerId, true);
                 }
-
-                // 4. Update Header Stats (Cost/Slots)
-                const stats = getCharStats(tracker, charId, role);
-                const statsBar = document.getElementById(`stats-bar-${charId}-${role}`);
-                if (statsBar) statsBar.innerHTML = renderStatsBarContent(stats);
             }
         }
 
