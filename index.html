@@ -556,7 +556,11 @@
             });
             document.getElementById(viewName).classList.remove('d-none');
             updateNavbar(viewName);
-            window.scrollTo(0, 0);
+
+            // FIXED: Only scroll to top if we are NOT in the tracker view (prevents jump on reload)
+            if (viewName !== 'viewTracker') {
+                window.scrollTo(0, 0);
+            }
         }
 
         function updateNavbar(viewName) {
@@ -583,16 +587,35 @@
         }
 
         /* --- 5. TRACKER RENDER --- */
-        function loadTracker(id) {
+        // FIXED: Added 'preserveScroll' parameter
+        function loadTracker(id, preserveScroll = false) {
             currentTrackerId = id;
             const tracker = trackers.find(t => t.id === id);
             if (!tracker) return showDashboard();
+
+            // Save scroll positions before clearing
+            let scrollMap = {};
+            if (preserveScroll) {
+                document.querySelectorAll('.target-list-container').forEach(el => {
+                    scrollMap[el.id] = el.scrollTop;
+                });
+            }
+
             const container = document.getElementById('runColumns');
             container.innerHTML = '';
             renderColumn(container, tracker.main, 'main', tracker);
             renderColumn(container, tracker.sup1, 'support', tracker);
             renderColumn(container, tracker.sup2, 'support', tracker);
+
             switchView('viewTracker');
+
+            // Restore scroll positions
+            if (preserveScroll) {
+                Object.keys(scrollMap).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.scrollTop = scrollMap[id];
+                });
+            }
         }
 
         function renderColumn(container, charId, role, tracker) {
@@ -608,6 +631,9 @@
 
             const searchId = `search-${charId}-${role}`;
 
+            // Added unique ID for stats bar to update it easily
+            const statsId = `stats-bar-${charId}-${role}`;
+
             col.innerHTML = `
                 <div class="card bg-dark border-secondary h-100">
                     <div class="card-header border-secondary d-flex justify-content-between align-items-center">
@@ -618,15 +644,8 @@
                         <span class="badge ${badgeClass}">${role.toUpperCase()}</span>
                     </div>
                     <div class="card-body d-flex flex-column p-2">
-                        <div class="stats-bar">
-                            <div class="stat-item text-warning" title="Slots Used / Max Capacity">
-                                <i class="fa-solid fa-layer-group"></i> 
-                                Slots: <b>${stats.usedSlots} / ${stats.cap}</b>
-                            </div>
-                            <div class="stat-item text-info" title="Total Potential Cost">
-                                <i class="fa-solid fa-bolt"></i> 
-                                Cost: <b>${stats.totalCost}</b>
-                            </div>
+                        <div class="stats-bar" id="${statsId}">
+                            ${renderStatsBarContent(stats)}
                         </div>
 
                         <div class="mb-2">
@@ -710,25 +729,39 @@
                 const descHtml = resolveDescription(pot, t.level);
 
                 const item = document.createElement('div');
+                item.id = `target-item-${pot.id}`; // Add ID for direct update
                 item.className = `card bg-secondary bg-opacity-10 ${borderClass} p-2 mb-2`;
                 item.innerHTML = `
                     <div class="d-flex align-items-center gap-2 mb-1">
                         <img src="${pot.imgUrl}" onerror="${onError}" width="35" height="35" class="rounded">
                         <div class="flex-grow-1" style="line-height:1.1;">
                             <div class="text-white fw-bold" style="font-size:0.8rem;">${pot.name}</div>
-                            ${isMaxed ? '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>' : ''}
+                            <span id="badge-${pot.id}">${isMaxed ? '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>' : ''}</span>
                         </div>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', -1)">-</button>
-                            <button class="btn btn-dark disabled text-white fw-bold py-0" style="width:25px; font-size:0.8rem;">${t.level}</button>
-                            <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', 1)">+</button>
+                            <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', -1, '${charId}', '${role}')">-</button>
+                            <button class="btn btn-dark disabled text-white fw-bold py-0" style="width:25px; font-size:0.8rem;" id="lvl-display-${pot.id}">${t.level}</button>
+                            <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', 1, '${charId}', '${role}')">+</button>
                         </div>
                         <button class="btn btn-sm text-danger py-0 px-1" onclick="removePotential('${tracker.id}', '${pot.id}')"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <div class="desc-text">${descHtml}</div>
+                    <div class="desc-text" id="desc-${pot.id}">${descHtml}</div>
                 `;
                 targetContainer.appendChild(item);
             });
+        }
+
+        function renderStatsBarContent(stats) {
+            return `
+                <div class="stat-item text-warning" title="Slots Used / Max Capacity">
+                    <i class="fa-solid fa-layer-group"></i> 
+                    Slots: <b>${stats.usedSlots} / ${stats.cap}</b>
+                </div>
+                <div class="stat-item text-info" title="Total Potential Cost">
+                    <i class="fa-solid fa-bolt"></i> 
+                    Cost: <b>${stats.totalCost}</b>
+                </div>
+            `;
         }
 
         /* --- 6. ACTIONS --- */
@@ -763,18 +796,50 @@
             const tracker = trackers.find(t => t.id === trackerId);
             tracker.targets.push({ potentialId: potId, charId: charId, level: 1 });
             saveData();
-            loadTracker(trackerId);
+            loadTracker(trackerId, true); // preserve scroll
         }
 
-        function updateLevel(trackerId, potId, change) {
+        // FIXED: SMART UPDATE (No Re-render)
+        function updateLevel(trackerId, potId, change, charId, role) {
             const tracker = trackers.find(t => t.id === trackerId);
             const target = tracker.targets.find(t => t.potentialId === potId);
-            if (target) {
-                target.level += change;
-                if (target.level < 1) target.level = 1;
-                if (target.level > MAX_LEVEL) target.level = MAX_LEVEL;
+            const pot = gameData.potentials.find(p => p.id === potId);
+
+            if (target && pot) {
+                let newLevel = target.level + change;
+                if (newLevel < 1) newLevel = 1;
+                if (newLevel > MAX_LEVEL) newLevel = MAX_LEVEL;
+
+                // Update Data
+                target.level = newLevel;
                 saveData();
-                loadTracker(trackerId);
+
+                // --- DOM UPDATES (No full reload) ---
+
+                // 1. Update Number
+                document.getElementById(`lvl-display-${potId}`).textContent = newLevel;
+
+                // 2. Update Description
+                document.getElementById(`desc-${potId}`).innerHTML = resolveDescription(pot, newLevel);
+
+                // 3. Update Max Badge & Border
+                const cardItem = document.getElementById(`target-item-${potId}`);
+                const badgeContainer = document.getElementById(`badge-${potId}`);
+
+                if (newLevel === MAX_LEVEL) {
+                    cardItem.classList.remove('border-0');
+                    cardItem.classList.add('border-warning', 'border-2');
+                    badgeContainer.innerHTML = '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>';
+                } else {
+                    cardItem.classList.remove('border-warning', 'border-2');
+                    cardItem.classList.add('border-0');
+                    badgeContainer.innerHTML = '';
+                }
+
+                // 4. Update Header Stats (Cost/Slots)
+                const stats = getCharStats(tracker, charId, role);
+                const statsBar = document.getElementById(`stats-bar-${charId}-${role}`);
+                if (statsBar) statsBar.innerHTML = renderStatsBarContent(stats);
             }
         }
 
@@ -782,7 +847,7 @@
             const tracker = trackers.find(t => t.id === trackerId);
             tracker.targets = tracker.targets.filter(t => t.potentialId !== potId);
             saveData();
-            loadTracker(trackerId);
+            loadTracker(trackerId, true); // preserve scroll
         }
 
         /* --- 7. UTILS & DASHBOARD --- */
