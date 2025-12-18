@@ -613,11 +613,13 @@
 
             // Restore scroll positions
             if (preserveScroll) {
-                window.scrollTo(0, winScroll);
-                Object.keys(scrollMap).forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.scrollTop = scrollMap[id];
-                });
+                setTimeout(() => {
+                    window.scrollTo(0, winScroll);
+                    Object.keys(scrollMap).forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.scrollTop = scrollMap[id];
+                    });
+                }, 0);
             }
         }
 
