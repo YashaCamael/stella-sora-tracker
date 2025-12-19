@@ -297,9 +297,9 @@ function renderColumn(container, charId, role, tracker) {
                     <span id="badge-${pot.id}">${isMaxed ? '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>' : ''}</span>
                 </div>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', -1, '${charId}', '${role}')">-</button>
+                    <button class="btn btn-outline-secondary py-0" id="btn-minus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', -1, '${charId}', '${role}')">-</button>
                     <button class="btn btn-dark disabled text-white fw-bold py-0" style="width:25px; font-size:0.8rem;" id="lvl-display-${pot.id}">${t.level}</button>
-                    <button class="btn btn-outline-secondary py-0" onclick="updateLevel('${tracker.id}', '${pot.id}', 1, '${charId}', '${role}')">+</button>
+                    <button class="btn btn-outline-secondary py-0" id="btn-plus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', 1, '${charId}', '${role}')" ${isMaxed ? 'disabled' : ''}>+</button>
                 </div>
                 <button class="btn btn-sm text-danger py-0 px-1" onclick="removePotential('${tracker.id}', '${pot.id}')"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -370,7 +370,45 @@ function updateLevel(trackerId, potId, change, charId, role) {
         if (target.level !== newLevel) {
             target.level = newLevel;
             saveData();
-            loadTracker(trackerId, true);
+
+            // --- SMART UPDATE (No Re-render) ---
+            const pot = gameData.potentials.find(p => p.id === potId);
+            const isMaxed = newLevel === MAX_LEVEL;
+
+            // 1. Update Display Number
+            const lvlDisp = document.getElementById(`lvl-display-${potId}`);
+            if (lvlDisp) lvlDisp.textContent = newLevel;
+
+            // 2. Update Badge & Border
+            const badgeContainer = document.getElementById(`badge-${potId}`);
+            const itemCard = document.getElementById(`target-item-${potId}`);
+
+            if (isMaxed) {
+                if (badgeContainer) badgeContainer.innerHTML = '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>';
+                if (itemCard) {
+                    itemCard.classList.remove('border-0');
+                    itemCard.classList.add('border-warning', 'border-2');
+                }
+            } else {
+                if (badgeContainer) badgeContainer.innerHTML = '';
+                if (itemCard) {
+                    itemCard.classList.remove('border-warning', 'border-2');
+                    itemCard.classList.add('border-0');
+                }
+            }
+
+            // 3. Update Description
+            const descContainer = document.getElementById(`desc-${potId}`);
+            if (descContainer) descContainer.innerHTML = resolveDescription(pot, newLevel);
+
+            // 4. Update Buttons
+            const btnPlus = document.getElementById(`btn-plus-${potId}`);
+            if (btnPlus) btnPlus.disabled = isMaxed;
+
+            // 5. Update Stats Bar for this Char/Role
+            const stats = getCharStats(tracker, charId, role);
+            const statsBar = document.getElementById(`stats-bar-${charId}-${role}`);
+            if (statsBar) statsBar.innerHTML = renderStatsBarContent(stats);
         }
     }
 }
