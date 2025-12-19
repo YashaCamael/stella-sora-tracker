@@ -1,4 +1,8 @@
-# Stella Sora Potential Tracker 🌌
+# Stella Sora - Potential Tracker
+
+![App Screenshot](https://via.placeholder.com/800x400?text=App+Screenshot+Here)
+> *Note: Please replace this placeholder with a screenshot of your running application.*
+ 🌌
 
 A progressive web application (PWA) designed to track characters, manage potential builds, and calculate stat summaries for the rogue-like game *Stella Sora*.
 
