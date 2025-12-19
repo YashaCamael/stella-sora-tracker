@@ -139,7 +139,39 @@ function updateNavbar(viewName) {
     }
 }
 
-/* --- 5. TRACKER RENDER --- */
+/* --- 5. RENDER COMPONENTS --- */
+function renderTargetItem(tracker, pot, charId, role) {
+    const target = tracker.targets.find(t => t.potentialId === pot.id);
+    if (!target) return ''; // Should not happen if called correctly
+
+    const placeholder = `https://placehold.co/50x50/${pot.color}/ffffff?text=${pot.displayNum}`;
+    const onError = `this.onerror=null;this.src='${placeholder}';`;
+
+    const isMaxed = target.level === MAX_LEVEL;
+    const borderClass = isMaxed ? "border-warning border-2" : "border-0";
+    const descHtml = resolveDescription(pot, target.level);
+
+    return `
+        <div id="target-item-${pot.id}" class="card bg-secondary bg-opacity-10 ${borderClass} p-2 mb-2">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <img src="${pot.imgUrl}" onerror="${onError}" width="35" height="35" class="rounded">
+                <div class="flex-grow-1" style="line-height:1.1;">
+                    <div class="text-white fw-bold" style="font-size:0.8rem;">${pot.name}</div>
+                    <span id="badge-${pot.id}">${isMaxed ? '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>' : ''}</span>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary py-0" id="btn-minus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', -1, '${charId}', '${role}')">-</button>
+                    <button class="btn btn-dark disabled text-white fw-bold py-0" style="width:25px; font-size:0.8rem;" id="lvl-display-${pot.id}">${target.level}</button>
+                    <button class="btn btn-outline-secondary py-0" id="btn-plus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', 1, '${charId}', '${role}')" ${isMaxed ? 'disabled' : ''}>+</button>
+                </div>
+                <button class="btn btn-sm text-danger py-0 px-1" onclick="removePotential('${tracker.id}', '${pot.id}')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="desc-text" id="desc-${pot.id}">${descHtml}</div>
+        </div>
+    `;
+}
+
+/* --- 6. TRACKER RENDER --- */
 // FIXED: Added 'preserveScroll' parameter
 function loadTracker(id, preserveScroll = false) {
     currentTrackerId = id;
@@ -279,33 +311,15 @@ function renderColumn(container, charId, role, tracker) {
 
     charTargets.forEach(t => {
         const pot = gameData.potentials.find(p => p.id === t.potentialId);
-        const placeholder = `https://placehold.co/50x50/${pot.color}/ffffff?text=${pot.displayNum}`;
-        const onError = `this.onerror=null;this.src='${placeholder}';`;
+        // Use Component
+        const itemHtml = renderTargetItem(tracker, pot, charId, role);
 
-        const isMaxed = t.level === MAX_LEVEL;
-        const borderClass = isMaxed ? "border-warning border-2" : "border-0";
-        const descHtml = resolveDescription(pot, t.level);
-
-        const item = document.createElement('div');
-        item.id = `target-item-${pot.id}`; // Add ID for direct update
-        item.className = `card bg-secondary bg-opacity-10 ${borderClass} p-2 mb-2`;
-        item.innerHTML = `
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <img src="${pot.imgUrl}" onerror="${onError}" width="35" height="35" class="rounded">
-                <div class="flex-grow-1" style="line-height:1.1;">
-                    <div class="text-white fw-bold" style="font-size:0.8rem;">${pot.name}</div>
-                    <span id="badge-${pot.id}">${isMaxed ? '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>' : ''}</span>
-                </div>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary py-0" id="btn-minus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', -1, '${charId}', '${role}')">-</button>
-                    <button class="btn btn-dark disabled text-white fw-bold py-0" style="width:25px; font-size:0.8rem;" id="lvl-display-${pot.id}">${t.level}</button>
-                    <button class="btn btn-outline-secondary py-0" id="btn-plus-${pot.id}" onclick="updateLevel('${tracker.id}', '${pot.id}', 1, '${charId}', '${role}')" ${isMaxed ? 'disabled' : ''}>+</button>
-                </div>
-                <button class="btn btn-sm text-danger py-0 px-1" onclick="removePotential('${tracker.id}', '${pot.id}')"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="desc-text" id="desc-${pot.id}">${descHtml}</div>
-        `;
-        targetContainer.appendChild(item);
+        // We need a wrapper to append string easily, or just update innerHTML of container?
+        // Actually, renderTargetItem returns the string for the card.
+        // We can append it.
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = itemHtml;
+        targetContainer.appendChild(tempDiv.firstElementChild);
     });
 }
 
@@ -322,7 +336,7 @@ function renderStatsBarContent(stats) {
     `;
 }
 
-/* --- 6. ACTIONS --- */
+/* --- 7. ACTIONS --- */
 function filterPotentials(charId, role) {
     const searchInput = document.getElementById(`search-${charId}-${role}`);
     const filterText = searchInput.value.toLowerCase();
@@ -371,41 +385,19 @@ function updateLevel(trackerId, potId, change, charId, role) {
             target.level = newLevel;
             saveData();
 
-            // --- SMART UPDATE (No Re-render) ---
+            // --- COMPONENT UPDATE (Re-render Item Only) ---
             const pot = gameData.potentials.find(p => p.id === potId);
-            const isMaxed = newLevel === MAX_LEVEL;
 
-            // 1. Update Display Number
-            const lvlDisp = document.getElementById(`lvl-display-${potId}`);
-            if (lvlDisp) lvlDisp.textContent = newLevel;
+            // 1. Generate New HTML
+            const newHtml = renderTargetItem(tracker, pot, charId, role);
 
-            // 2. Update Badge & Border
-            const badgeContainer = document.getElementById(`badge-${potId}`);
-            const itemCard = document.getElementById(`target-item-${potId}`);
-
-            if (isMaxed) {
-                if (badgeContainer) badgeContainer.innerHTML = '<span class="badge bg-warning text-dark" style="font-size:0.6rem">MAX</span>';
-                if (itemCard) {
-                    itemCard.classList.remove('border-0');
-                    itemCard.classList.add('border-warning', 'border-2');
-                }
-            } else {
-                if (badgeContainer) badgeContainer.innerHTML = '';
-                if (itemCard) {
-                    itemCard.classList.remove('border-warning', 'border-2');
-                    itemCard.classList.add('border-0');
-                }
+            // 2. Swap in DOM
+            const currentEl = document.getElementById(`target-item-${potId}`);
+            if (currentEl) {
+                currentEl.outerHTML = newHtml;
             }
 
-            // 3. Update Description
-            const descContainer = document.getElementById(`desc-${potId}`);
-            if (descContainer) descContainer.innerHTML = resolveDescription(pot, newLevel);
-
-            // 4. Update Buttons
-            const btnPlus = document.getElementById(`btn-plus-${potId}`);
-            if (btnPlus) btnPlus.disabled = isMaxed;
-
-            // 5. Update Stats Bar for this Char/Role
+            // 3. Update Stats Bar for this Char/Role
             const stats = getCharStats(tracker, charId, role);
             const statsBar = document.getElementById(`stats-bar-${charId}-${role}`);
             if (statsBar) statsBar.innerHTML = renderStatsBarContent(stats);
