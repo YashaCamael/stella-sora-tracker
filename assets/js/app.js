@@ -289,7 +289,9 @@ function renderColumn(container, charId, role, tracker) {
 
             card.onclick = () => {
                 if (!isSelected) {
-                    if (stats.isFull) {
+                    // FIX: Fetch fresh stats dynamically to avoid stale closure after smart updates
+                    const currentStats = getCharStats(tracker, charId, role);
+                    if (currentStats.isFull) {
                         Swal.fire({ icon: 'warning', title: 'Capacity Reached', timer: 2000, showConfirmButton: false });
                     } else {
                         addPotential(tracker.id, pot.id, charId);
