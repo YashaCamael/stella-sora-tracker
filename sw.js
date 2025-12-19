@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stella-tracker-v1';
+const CACHE_NAME = 'stella-tracker-v1.1';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
